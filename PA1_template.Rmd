@@ -1,25 +1,110 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Travis Lee"
+output: md_document
 ---
+##Loading and preprocessing the data
+```{r}
+if (!file.exists("./data")) {
+        dir.create("./data")     
+}
+URL <- "https://github.com/TravisLeeTS/RepData_PeerAssessment1/blob/master/activity.zip?raw=true"
+path1 <- "./data/activity.zip"
+if (!file.exists(path1)) {
+        download.file(URL, path1, mode = "wb")
+        unzip(path1, exdir = "./data")
+}
+path2 <- "./data/activity.csv"
+activity <- read.csv(path2, na.strings = "NA", stringsAsFactors = FALSE)
+activity$date <- as.Date(activity$date)
+```
 
+##total, mean and median of the steps taken per day:
+```{r}
+dailyactivity <- dplyr::summarise(dplyr::group_by(activity, date),
+                                  totalsteps = sum(steps),
+                                  meansteps = mean(steps, na.rm = TRUE),
+                                  mediansteps = median(steps, na.rm = TRUE))
+print.data.frame(dailyactivity)
+```
+##Histogram of the total number of steps taken each day
+```{r}
+library(ggplot2)
+g <- ggplot(data = dailyactivity, aes(date, totalsteps))
+gg <- g + geom_bar(stat = "identity") + theme_bw() + xlab("Date") + ylab("Total Steps") + ggtitle("Histogram")
+gg
+```
 
-## Loading and preprocessing the data
+##The average daily activity pattern
+```{r}
+intervalmean <- dplyr::summarise(dplyr::group_by(activity, interval),
+                                 intmean = mean(steps, na.rm = TRUE))
+g2 <- ggplot(data = intervalmean, aes(interval, intmean))
+gg2 <- g2 + geom_line() + theme_bw() + xlab("Interval") + ylab("Average Steps per Day") + ggtitle("Time Series Graph")
+gg2
+```
 
+##The 5-minute interval on average of all days which contains the maxium number of step
+```{r}
+intervalmean[which.max(intervalmean$intmean), ]
+#At the 835th 5 minutes interval, it reached the max: 206 steps.
+```
 
+##Imputing missing values
+#Calculating the number of NA's in step variable
+```{r}
+sum(is.na(activity$steps))
+```
 
-## What is mean total number of steps taken per day?
+##Filling in all missing values using 5 minute-interval means in a new dataset(newactivity)
+```{r}
+fill <- function(row) {
+        intervalmean[intervalmean[, 1] == row[1, 3], 2]
+}
+newactivity <- activity
+for (i in 1:nrow(activity)) {
+        if (is.na(activity[i, 1])) {
+                newactivity[i, 1] <- fill(activity[i, ])
+        }
+}
+```
 
+##Histogram of the total number of steps taken each day with no NA data
+```{r}
+newdailyactivity <- dplyr::summarise(dplyr::group_by(newactivity, date),
+                                      totalsteps = sum(steps),
+                                      meansteps = mean(steps, na.rm = TRUE),
+                                      mediansteps = median(steps, na.rm = TRUE))
+newg <- ggplot(data = newdailyactivity, aes(date, totalsteps))
+newgg <- newg + geom_bar(stat = "identity") + theme_bw() + xlab("Date") + ylab("Total Steps") + ggtitle("Histogram without NA")
+newgg
+print.data.frame(dailyactivity)
+```
 
+##Impact of imputting data on the stimates of the total daily number of steps
+```{r}
+summary(activity$steps)
+summary(newactivity$steps)
+#Simialr mean & median but new dataset has higher 3rd quatile
+```
 
-## What is the average daily activity pattern?
+##Differences in activity patterns between weekdays and weekends
+#Creating a new factor for weekdays and weekends:
+```{r}
+weekends1 <- c("Saturday", "Sunday")
+newactivity$wDay <- factor((weekdays(newactivity$date) %in% weekends1),
+                         levels = c(FALSE, TRUE),
+                         labels = c("weekday", "weekend"))
+```
 
+#Calculating the mean of steps by interval and weekend or weekday:
+```{r}
+intervalmean2 <- dplyr::summarise(dplyr::group_by(newactivity, interval, wDay),
+                                  intmean2 = mean(steps, na.rm = TRUE))
+```
 
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+#Plotting data:
+```{r}
+library(lattice)
+xyplot(intmean2 ~ interval | wDay, data = intervalmean2, type = "l",
+       layout = c(1, 2), xlab = "Interval", ylab = "Average of steps taken")
+```
